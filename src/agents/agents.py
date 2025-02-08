@@ -2,12 +2,15 @@ from dataclasses import dataclass
 
 from langgraph.graph.state import CompiledStateGraph
 
-from agents.bg_task_agent.bg_task_agent import bg_task_agent
+from agents.background_task_agent.background_task_agent import bg_task_agent
 from agents.chatbot import chatbot
 from agents.research_assistant import research_assistant
 from schema import AgentInfo
+from agents.sql_agency import sql_agency
+from agents.command_agent import command_agent
+from agents.email_classification_agent import email_classification_agent
 
-DEFAULT_AGENT = "research-assistant"
+DEFAULT_AGENT = "SQL LLM"
 
 
 @dataclass
@@ -17,11 +20,12 @@ class Agent:
 
 
 agents: dict[str, Agent] = {
-    "chatbot": Agent(description="A simple chatbot.", graph=chatbot),
-    "research-assistant": Agent(
-        description="A research assistant with web search and calculator.", graph=research_assistant
-    ),
-    "bg-task-agent": Agent(description="A background task agent.", graph=bg_task_agent),
+    "Chat": Agent(description="Hello! I'm an AI-powered chat application.", graph=chatbot),
+    "Research Assistant": Agent(description="Hello! I'm a AI-powered research assistant. I have access to web search tool and calculator tool.", graph=research_assistant),
+    "Command Agent": Agent(description="Hello! I'm a command agent.", graph=command_agent),
+    "Background Task Agent": Agent(description="Hello! I am an AI-powered agent that can run tasks in the backgrond.", graph=bg_task_agent),
+    "SQL LLM": Agent(description="Hello! I'm an AI-powered assistant. I can convert your natural language queries to SQL queries.", graph=sql_agency),
+    "Email Classification Agent": Agent(description="Hello! I'm an AI-powered assistant. I can convert your emails written, in natural language, to json structures.", graph=email_classification_agent),
 }
 
 

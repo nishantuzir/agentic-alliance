@@ -2,15 +2,14 @@ import asyncio
 import os
 import urllib.parse
 from collections.abc import AsyncGenerator
-
 import streamlit as st
 from dotenv import load_dotenv
 from pydantic import ValidationError
 from streamlit.runtime.scriptrunner import get_script_run_ctx
-
 from client import AgentClient, AgentClientError
 from schema import ChatHistory, ChatMessage
 from schema.task_data import TaskData, TaskDataStatus
+from core import settings
 
 # A Streamlit app for interacting with the langgraph agent via a simple chat interface.
 # The app has three main functions which are all run async:
@@ -24,14 +23,22 @@ from schema.task_data import TaskData, TaskDataStatus
 
 
 APP_TITLE = "Agent Service Toolkit"
-APP_ICON = "🧰"
+APP_ICON = "🛠️"
+SIDEBAR_APP_ICON = "🛠️"
+
 
 
 async def main() -> None:
     st.set_page_config(
         page_title=APP_TITLE,
         page_icon=APP_ICON,
-        menu_items={},
+        menu_items={
+        # 'Get Help': 'https://www.extremelycoolapp.com/help',
+        # 'Report a bug': "https://www.extremelycoolapp.com/bug",
+        # 'About': "# This is a header. This is an *extremely* cool app!"
+    },
+        layout="centered",
+        initial_sidebar_state="auto",
     )
 
     # Hide the streamlit upper-right chrome
@@ -43,11 +50,22 @@ async def main() -> None:
                 height: 0%;
                 position: fixed;
             }
+        
+            
         </style>
         """,
     )
-    if st.get_option("client.toolbarMode") != "minimal":
-        st.set_option("client.toolbarMode", "minimal")
+
+    # hide_streamlit_style = """
+    #         <style>
+    #         [data-testid="stToolbar"] {visibility: hidden !important;}
+    #         footer {visibility: hidden !important;}
+    #         </style>
+    #         """
+    # st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
+    if st.get_option("client.toolbarMode") != "viewer":
+        st.set_option("client.toolbarMode", "viewer")
         await asyncio.sleep(0.1)
         st.rerun()
 
@@ -80,43 +98,77 @@ async def main() -> None:
                 messages = []
         st.session_state.messages = messages
         st.session_state.thread_id = thread_id
+        st.session_state.welcome_message = agent_client.agent_intro
 
     # Config options
     with st.sidebar:
-        st.header(f"{APP_ICON} {APP_TITLE}")
+
+        st.markdown(
+        """
+        <div style="text-align: center; margin-bottom: 20px; margin-right: 40px;">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/7/79/Siemens_Healthineers_logo.svg" alt="Siemens Logo"
+            style="width: 300px; 
+            padding-bottom: 10px; 
+            padding-left: 60px; 
+            padding-right: 30px; 
+            border-radius: 1px;
+            background-color: transparent;
+            margin-top: -80px;">
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+        
+        st.header(f"{SIDEBAR_APP_ICON} {APP_TITLE}")
         ""
-        "Full toolkit for running an AI agent service built with LangGraph, FastAPI and Streamlit"
+        st.caption(
+                "Toolkit for running AI Agent services built with LangGraph, FastAPI and Streamlit"
+            )
         with st.popover(":material/settings: Settings", use_container_width=True):
             model_idx = agent_client.info.models.index(agent_client.info.default_model)
-            model = st.selectbox("LLM to use", options=agent_client.info.models, index=model_idx)
+            model = st.selectbox("Language Model", options=agent_client.info.models, index=model_idx)
             agent_list = [a.key for a in agent_client.info.agents]
             agent_idx = agent_list.index(agent_client.info.default_agent)
             agent_client.agent = st.selectbox(
-                "Agent to use",
+                "Agent",
                 options=agent_list,
                 index=agent_idx,
             )
-            use_streaming = st.toggle("Stream results", value=True)
+            use_streaming = st.toggle("Streaming", value=True)
 
         @st.dialog("Architecture")
         def architecture_dialog() -> None:
             st.image(
                 "https://github.com/JoshuaC215/agent-service-toolkit/blob/main/media/agent_architecture.png?raw=true"
             )
-            "[View full size on Github](https://github.com/JoshuaC215/agent-service-toolkit/blob/main/media/agent_architecture.png)"
             st.caption(
-                "App hosted on [Streamlit Cloud](https://share.streamlit.io/) with FastAPI service running in [Azure](https://learn.microsoft.com/en-us/azure/app-service/)"
+                "Reference: Check out the full sized image in [Agent Service Toolkit Github](https://github.com/JoshuaC215/agent-service-toolkit/blob/main/media/agent_architecture.png)"
             )
+
+        @st.dialog("Source Code")
+        def sourcecode_dialog() -> None:
+
+            st.caption(
+                "Implementation: Check out the source code in [SQL LLM Agent Service Toolkit](https://SHS-GenAI-CoC@dev.azure.com/SHS-GenAI-CoC/GenAI-CoC/_git/SQL%20LLM)"
+            )
+            st.caption(
+                "Reference: Check out the reference source code in [Agent Service Toolkit](https://github.com/JoshuaC215/agent-service-toolkit.git)"
+            )
+
 
         if st.button(":material/schema: Architecture", use_container_width=True):
             architecture_dialog()
 
         with st.popover(":material/policy: Privacy", use_container_width=True):
             st.write(
-                "Prompts, responses and feedback in this app are anonymously recorded and saved to LangSmith for product evaluation and improvement purposes only."
+                "All Prompts, responses and feedbacks in the application are recorded anonymously and displayed in Langfuse for the purpose of product evaluation and improvement only."
             )
 
-        @st.dialog("Share/resume chat")
+        if st.button(":material/schema: Source Code", use_container_width=True):
+            sourcecode_dialog()
+        
+
+        @st.dialog("Share/Resume Chat")
         def share_chat_dialog() -> None:
             session = st.runtime.get_instance()._session_mgr.list_active_sessions()[0]
             st_base_url = urllib.parse.urlunparse(
@@ -129,21 +181,18 @@ async def main() -> None:
             st.markdown(f"**Chat URL:**\n```text\n{chat_url}\n```")
             st.info("Copy the above URL to share or revisit this chat")
 
-        if st.button(":material/upload: Share/resume chat", use_container_width=True):
+        if st.button(":material/upload: Share / Resume Chat", use_container_width=True):
             share_chat_dialog()
-
-        "[View the source code](https://github.com/JoshuaC215/agent-service-toolkit)"
-        st.caption(
-            "Made with :material/favorite: by [Joshua](https://www.linkedin.com/in/joshua-k-carroll/) in Oakland"
-        )
+        
+        st.caption("Developed by the SHS GenAI-CoC Team✌️")
 
     # Draw existing messages
     messages: list[ChatMessage] = st.session_state.messages
 
     if len(messages) == 0:
-        WELCOME = "Hello! I'm an AI-powered research assistant with web search and a calculator. Ask me anything!"
+        welcome_message = st.session_state.welcome_message + " Type you query below to get started!"
         with st.chat_message("ai"):
-            st.write(WELCOME)
+            st.write(welcome_message)
 
     # draw_messages() expects an async iterator over messages
     async def amessage_iter() -> AsyncGenerator[ChatMessage, None]:
@@ -153,9 +202,10 @@ async def main() -> None:
     await draw_messages(amessage_iter())
 
     # Generate new message if the user provided new input
-    if user_input := st.chat_input():
+    if user_input := st.chat_input("Type your message here...press Enter to send. Press Shift + Enter for a new line."):
         messages.append(ChatMessage(type="human", content=user_input))
         st.chat_message("human").write(user_input)
+        
         try:
             if use_streaming:
                 stream = agent_client.astream(
@@ -333,19 +383,20 @@ async def handle_feedback() -> None:
         st.session_state.last_feedback = (None, None)
 
     latest_run_id = st.session_state.messages[-1].run_id
+
     feedback = st.feedback("stars", key=latest_run_id)
 
     # If the feedback value or run ID has changed, send a new feedback record
     if feedback is not None and (latest_run_id, feedback) != st.session_state.last_feedback:
         # Normalize the feedback value (an index) to a score between 0 and 1
-        normalized_score = (feedback + 1) / 5.0
-
+        # normalized_score = (feedback + 1) / 5.0
+        score = feedback + 1
         agent_client: AgentClient = st.session_state.agent_client
         try:
             await agent_client.acreate_feedback(
                 run_id=latest_run_id,
                 key="human-feedback-stars",
-                score=normalized_score,
+                score=score,
                 kwargs={"comment": "In-line human feedback"},
             )
         except AgentClientError as e:

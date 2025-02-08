@@ -1,4 +1,4 @@
-# 🧰 AI Agent Service Toolkit
+# 🧰 AI Agentic Alliance
 
 [![build status](https://github.com/JoshuaC215/agent-service-toolkit/actions/workflows/test.yml/badge.svg)](https://github.com/JoshuaC215/agent-service-toolkit/actions/workflows/test.yml) [![codecov](https://codecov.io/github/JoshuaC215/agent-service-toolkit/graph/badge.svg?token=5MTJSYWD05)](https://codecov.io/github/JoshuaC215/agent-service-toolkit) [![Python Version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FJoshuaC215%2Fagent-service-toolkit%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)](https://github.com/JoshuaC215/agent-service-toolkit/blob/main/pyproject.toml)
 [![GitHub License](https://img.shields.io/github/license/JoshuaC215/agent-service-toolkit)](https://github.com/JoshuaC215/agent-service-toolkit/blob/main/LICENSE) [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_red.svg)](https://agent-service-toolkit.streamlit.app/)
@@ -9,13 +9,7 @@ It includes a [LangGraph](https://langchain-ai.github.io/langgraph/) agent, a [F
 
 This project offers a template for you to easily build and run your own agents using the LangGraph framework. It demonstrates a complete setup from agent definition to user interface, making it easier to get started with LangGraph-based projects by providing a full, robust toolkit.
 
-**[🎥 Watch a video walkthrough of the repo and app](https://www.youtube.com/watch?v=pdYVHw_YCNY)**
-
 ## Overview
-
-### [Try the app!](https://agent-service-toolkit.streamlit.app/)
-
-<a href="https://agent-service-toolkit.streamlit.app/"><img src="media/app_screenshot.png" width="600"></a>
 
 ### Quickstart
 
@@ -79,8 +73,8 @@ The repository is structured as follows:
 1. Clone the repository:
 
    ```sh
-   git clone https://github.com/JoshuaC215/agent-service-toolkit.git
-   cd agent-service-toolkit
+   git clone https://github.com/nishantuzir/agentic-alliance.git
+   cd agentic-alliance
    ```
 
 2. Set up environment variables:
@@ -173,7 +167,7 @@ You can also run the agent service and the Streamlit app locally without Docker,
 
 4. Open your browser and navigate to the URL provided by Streamlit (usually `http://localhost:8501`).
 
-## Projects built with or inspired by agent-service-toolkit
+## Acknowledgements
 
 The following are a few of the public projects that drew code or inspiration from this repo.
 

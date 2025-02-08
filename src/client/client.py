@@ -2,7 +2,6 @@ import json
 import os
 from collections.abc import AsyncGenerator, Generator
 from typing import Any
-
 import httpx
 
 from schema import (
@@ -45,6 +44,7 @@ class AgentClient:
         self.timeout = timeout
         self.info: ServiceMetadata | None = None
         self.agent: str | None = None
+        self.agent_intro: str | None = None
         if get_info:
             self.retrieve_info()
         if agent:
@@ -71,6 +71,7 @@ class AgentClient:
         self.info: ServiceMetadata = ServiceMetadata.model_validate(response.json())
         if not self.agent or self.agent not in [a.key for a in self.info.agents]:
             self.agent = self.info.default_agent
+            self.agent_intro = self.info.default_agent_intro
 
     def update_agent(self, agent: str, verify: bool = True) -> None:
         if verify:
@@ -82,6 +83,8 @@ class AgentClient:
                     f"Agent {agent} not found in available agents: {', '.join(agent_keys)}"
                 )
         self.agent = agent
+        self.agent_intro == next(a.description for a in self.info.agents if a.key == agent)
+         
 
     async def ainvoke(
         self,
@@ -303,10 +306,11 @@ class AgentClient:
         """
         Create a feedback record for a run.
 
-        This is a simple wrapper for the LangSmith create_feedback API, so the
+        This is a simple wrapper for the Langfuse create_feedback API, so the
         credentials can be stored and managed in the service rather than the client.
-        See: https://api.smith.langchain.com/redoc#tag/feedback/operation/create_feedback_api_v1_feedback_post
+        https://python.reference.langfuse.com/langfuse/client#Langfuse.score
         """
+
         request = Feedback(run_id=run_id, key=key, score=score, kwargs=kwargs)
         async with httpx.AsyncClient() as client:
             try:
@@ -323,7 +327,7 @@ class AgentClient:
 
     def get_history(
         self,
-        thread_id: str,
+        thread_id: str | None = None,
     ) -> ChatHistory:
         """
         Get chat history.

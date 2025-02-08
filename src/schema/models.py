@@ -10,7 +10,14 @@ class Provider(StrEnum):
     GROQ = auto()
     AWS = auto()
     FAKE = auto()
+    AZUREOPENAI = auto()
+    OLLAMA = auto()
 
+class AzureOpenAIModelName(StrEnum):
+    """https://azure.microsoft.com/en-us/products/ai-services/openai-service"""
+
+    AZURE_GPT_4O_MINI = "azure-gpt-4o-mini"
+    AZURE_GPT_4O = "azure-gpt-4o"
 
 class OpenAIModelName(StrEnum):
     """https://platform.openai.com/docs/models/gpt-4o"""
@@ -53,6 +60,28 @@ class AWSModelName(StrEnum):
 
     BEDROCK_HAIKU = "bedrock-3.5-haiku"
 
+class OllamaModelName(StrEnum):
+    """https://ollama.com/search"""
+
+    DEEPSEEK_R1_1_5B = "deepseek-r1:1.5b"
+    DEEPSEEK_R1_14B = "deepseek-r1:14b"
+    PHI4_14B = "phi4:7b"
+    WIZARDLM2_7B = "wizardlm2:7b"
+    QWEN2_5_CODER_14B = "qwen2.5-coder:14b"
+    LLAMA_GUARD3_8B = "llama-guard3:8b"
+    LLAMA3_2_VISION_11B = "llama3.2-vision:11b"
+    SQLCODER_15B = "sqlcoder:15b"
+    QWEN2_5_CODER_7B = "qwen2.5-coder:7b"
+    QWEN2_5_1_5B = "qwen2.5:1.5b"
+    QWEN2_5_0_5B = "qwen2.5:0.5b"
+    QWEN2_5_14B = "qwen2.5:14b"
+    MATHSTRAL_7B = "mathstral:7b"
+    QWEN2_MATH_1_5B = "qwen2-math:1.5b"
+    MISTRALV0_3_7B = "mistralv0.3:7b"
+    LLAMA3_2_3B = "llama3.2:3b"
+    LLAMA3_1_8B = "llama3.1:8b"
+
+
 
 class FakeModelName(StrEnum):
     """Fake model for testing."""
@@ -68,4 +97,6 @@ AllModelEnum: TypeAlias = (
     | GroqModelName
     | AWSModelName
     | FakeModelName
+    | AzureOpenAIModelName
+    | OllamaModelName
 )

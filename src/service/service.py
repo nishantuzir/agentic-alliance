@@ -14,8 +14,9 @@ from langchain_core.messages import AnyMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph.state import CompiledStateGraph
-from langsmith import Client as LangsmithClient
-
+from langfuse import Langfuse as LangfuseClient
+from langfuse.decorators import langfuse_context
+from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
 from agents import DEFAULT_AGENT, get_agent, get_all_agent_info
 from core import settings
 from schema import (
@@ -28,6 +29,7 @@ from schema import (
     StreamInput,
     UserInput,
 )
+
 from service.utils import (
     convert_message_content_to_string,
     langchain_to_chat_message,
@@ -37,6 +39,12 @@ from service.utils import (
 warnings.filterwarnings("ignore", category=LangChainBetaWarning)
 logger = logging.getLogger(__name__)
 
+
+langfuse_client = LangfuseClient(secret_key=settings.LANGFUSE_SECRET_KEY, 
+                                 public_key=settings.LANGFUSE_PUBLIC_KEY, 
+                                 host=settings.LANGFUSE_HOST)
+
+langfuse_handler = LangfuseCallbackHandler() if settings.TRACING else None
 
 def verify_bearer(
     http_auth: Annotated[
@@ -75,7 +83,8 @@ async def info() -> ServiceMetadata:
     return ServiceMetadata(
         agents=get_all_agent_info(),
         models=models,
-        default_agent=DEFAULT_AGENT,
+        default_agent=settings.DEFAULT_AGENT,
+        default_agent_intro=settings.DEFAULT_AGENT_INTRO,
         default_model=settings.DEFAULT_MODEL,
     )
 
@@ -98,6 +107,7 @@ def _parse_input(user_input: UserInput) -> tuple[dict[str, Any], UUID]:
         "config": RunnableConfig(
             configurable=configurable,
             run_id=run_id,
+            callbacks=[langfuse_handler] if langfuse_handler else [],
         ),
     }
     return kwargs, run_id
@@ -116,7 +126,9 @@ async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatMe
     agent: CompiledStateGraph = get_agent(agent_id)
     kwargs, run_id = _parse_input(user_input)
     try:
-        response = await agent.ainvoke(**kwargs)
+        response = await agent.ainvoke(config=RunnableConfig(
+            run_id=run_id,
+        ),**kwargs)
         output = langchain_to_chat_message(response["messages"][-1])
         output.run_id = str(run_id)
         return output
@@ -133,6 +145,7 @@ async def message_generator(
 
     This is the workhorse method for the /stream endpoint.
     """
+    
     agent: CompiledStateGraph = get_agent(agent_id)
     kwargs, run_id = _parse_input(user_input)
 
@@ -200,9 +213,7 @@ def _sse_response_example() -> dict[int, Any]:
     }
 
 
-@router.post(
-    "/{agent_id}/stream", response_class=StreamingResponse, responses=_sse_response_example()
-)
+@router.post("/{agent_id}/stream", response_class=StreamingResponse, responses=_sse_response_example())
 @router.post("/stream", response_class=StreamingResponse, responses=_sse_response_example())
 async def stream(user_input: StreamInput, agent_id: str = DEFAULT_AGENT) -> StreamingResponse:
     """
@@ -223,20 +234,25 @@ async def stream(user_input: StreamInput, agent_id: str = DEFAULT_AGENT) -> Stre
 @router.post("/feedback")
 async def feedback(feedback: Feedback) -> FeedbackResponse:
     """
-    Record feedback for a run to LangSmith.
+    Record feedback for a run to Langfuse.
 
-    This is a simple wrapper for the LangSmith create_feedback API, so the
+    This is a simple wrapper for the Langfuse score API, so the
     credentials can be stored and managed in the service rather than the client.
-    See: https://api.smith.langchain.com/redoc#tag/feedback/operation/create_feedback_api_v1_feedback_post
+    See: 
     """
-    client = LangsmithClient()
+    
     kwargs = feedback.kwargs or {}
-    client.create_feedback(
-        run_id=feedback.run_id,
-        key=feedback.key,
-        score=feedback.score,
+
+    trace = langfuse_client.trace(name=feedback.key, session_id=feedback.run_id)
+    trace_id = trace.id
+    langfuse_client.score(
+        trace_id=trace_id,
+        name="explicit_user_feedback",
+        value=feedback.score,
+        data_type="NUMERIC",
         **kwargs,
     )
+
     return FeedbackResponse()
 
 

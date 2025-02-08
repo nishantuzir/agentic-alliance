@@ -12,7 +12,7 @@ agent = get_agent(DEFAULT_AGENT)
 
 
 async def main() -> None:
-    inputs = {"messages": [("user", "Find me a recipe for chocolate chip cookies")]}
+    inputs = {"messages": [("user", "Hi, how are you?")]}
     result = await agent.ainvoke(
         inputs,
         config=RunnableConfig(configurable={"thread_id": uuid4()}),

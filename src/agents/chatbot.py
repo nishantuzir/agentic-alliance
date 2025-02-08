@@ -3,8 +3,8 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig, RunnableLambda, RunnableSerializable
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, MessagesState, StateGraph
-
 from core import get_model, settings
+from langchain_core.messages import AIMessage, SystemMessage
 
 
 class AgentState(MessagesState, total=False):
@@ -12,6 +12,7 @@ class AgentState(MessagesState, total=False):
 
     documentation: https://typing.readthedocs.io/en/latest/spec/typeddict.html#totality
     """
+
 
 
 def wrap_model(model: BaseChatModel) -> RunnableSerializable[AgentState, AIMessage]:
@@ -29,6 +30,7 @@ async def acall_model(state: AgentState, config: RunnableConfig) -> AgentState:
 
     # We return a list, because this will get added to the existing list
     return {"messages": [response]}
+
 
 
 # Define the graph

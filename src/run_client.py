@@ -3,7 +3,7 @@ import asyncio
 from client import AgentClient
 from core import settings
 from schema import ChatMessage
-
+from langfuse.callback import CallbackHandler
 
 async def amain() -> None:
     #### ASYNC ####
@@ -11,9 +11,8 @@ async def amain() -> None:
 
     print("Agent info:")
     print(client.info)
-
     print("Chat example:")
-    response = await client.ainvoke("Tell me a brief joke?", model="gpt-4o")
+    response = await client.ainvoke("Hi, what can you do?", model="azure-gpt-4o-mini")
     response.pretty_print()
 
     print("\nStream example:")
@@ -33,9 +32,8 @@ def main() -> None:
 
     print("Agent info:")
     print(client.info)
-
     print("Chat example:")
-    response = client.invoke("Tell me a brief joke?", model="gpt-4o")
+    response = client.invoke("Hi, what can you do?", model="azure-gpt-4o-mini")
     response.pretty_print()
 
     print("\nStream example:")

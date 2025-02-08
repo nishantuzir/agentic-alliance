@@ -1,8 +1,6 @@
 from typing import Any, Literal, NotRequired
-
 from pydantic import BaseModel, Field, SerializeAsAny
 from typing_extensions import TypedDict
-
 from schema.models import AllModelEnum, AnthropicModelName, OpenAIModelName
 
 
@@ -11,11 +9,11 @@ class AgentInfo(BaseModel):
 
     key: str = Field(
         description="Agent key.",
-        examples=["research-assistant"],
+        examples=["SQL-LLM"],
     )
     description: str = Field(
         description="Description of the agent.",
-        examples=["A research assistant for generating research papers."],
+        examples=["A AI assistant for generating SQL queries from natural language based user queries."],
     )
 
 
@@ -30,7 +28,11 @@ class ServiceMetadata(BaseModel):
     )
     default_agent: str = Field(
         description="Default agent used when none is specified.",
-        examples=["research-assistant"],
+        examples=["SQL-LLM"],
+    )
+    default_agent_intro: str = Field(
+        description="Default agent introduction used when none is specified.",
+        examples=["Hello! I'm an AI-powered chatbot."],
     )
     default_model: AllModelEnum = Field(
         description="Default model used when none is specified.",
@@ -132,7 +134,7 @@ class ChatMessage(BaseModel):
 
 
 class Feedback(BaseModel):
-    """Feedback for a run, to record to LangSmith."""
+    """Feedback for a run, to record to Langfuse."""
 
     run_id: str = Field(
         description="Run ID to record feedback for.",
@@ -144,10 +146,10 @@ class Feedback(BaseModel):
     )
     score: float = Field(
         description="Feedback score.",
-        examples=[0.8],
+        examples=[3],
     )
     kwargs: dict[str, Any] = Field(
-        description="Additional feedback kwargs, passed to LangSmith.",
+        description="Additional feedback kwargs, passed to Langfuse.",
         default={},
         examples=[{"comment": "In-line human feedback"}],
     )
