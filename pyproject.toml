@@ -1,9 +1,9 @@
 [project]
-name = "agent-service-toolkit"
+name = "agentic-alliance"
 version = "0.1.0"
 description = "Full toolkit for running an AI agent service built with LangGraph, FastAPI and Streamlit"
 readme = "README.md"
-authors = [{ name = "Nishant Uzir", email = "nishant.uzir@siemens-healthineers.com" }]
+authors = [{ name = "Nishant Uzir", email = "uzirnishant@gmail.com" }]
 classifiers = [
     "Development Status :: 4 - Beta",
     "License :: OSI Approved :: MIT License",

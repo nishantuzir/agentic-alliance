@@ -1,22 +1,20 @@
 from typing import Annotated, Any
 
-from dotenv import find_dotenv
-from pydantic import BeforeValidator, HttpUrl, SecretStr, TypeAdapter, computed_field, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BeforeValidator, Field, HttpUrl, SecretStr, TypeAdapter, computed_field
+from pydantic_settings import BaseSettings
 
 from schema.models import (
     AllModelEnum,
     AnthropicModelName,
     AWSModelName,
+    AzureOpenAIModelName,
     DeepseekModelName,
     FakeModelName,
     GoogleModelName,
     GroqModelName,
-    OpenAIModelName,
-    AzureOpenAIModelName,
     OllamaModelName,
+    OpenAIModelName,
     Provider,
-    
 )
 
 
@@ -26,13 +24,6 @@ def check_str_is_http(x: str) -> str:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=find_dotenv(),
-        env_file_encoding="utf-8",
-        env_ignore_empty=True,
-        extra="ignore",
-        validate_default=False,
-    )
     MODE: str | None = None
 
     HOST: str = "0.0.0.0"
@@ -40,10 +31,10 @@ class Settings(BaseSettings):
 
     AUTH_SECRET: SecretStr | None = None
 
-    AZURE_OPENAI_API_KEY: str | None = model_config.get("AZURE_OPENAI_API_KEY", "password")
-    AZURE_OPENAI_DEPLOYMENT_NAME: str = model_config.get("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o-mini")
-    AZURE_OPENAI_ENDPOINT: str = model_config.get("AZURE_OPENAI_ENDPOINT", "")
-    AZURE_OPENAI_API_VERSION: str = model_config.get("AZURE_OPENAI_API_VERSION", "")
+    AZURE_OPENAI_API_KEY: str | None = None
+    AZURE_OPENAI_DEPLOYMENT_NAME: str = "gpt-4o-mini"
+    AZURE_OPENAI_ENDPOINT: str = ""
+    AZURE_OPENAI_API_VERSION: str = ""
 
     OPENAI_API_KEY: SecretStr | None = None
     DEEPSEEK_API_KEY: SecretStr | None = None
@@ -55,12 +46,11 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str | None = None
     OLLAMA_BASE_URL: str | None = None
 
+    CDM_POSTGRES_DB_URL: str | None = None
 
-    CDM_POSTGRES_DB_URL: str | None = model_config.get("CDM_POSTGRES_DB_URL", "password")
-
-    # If DEFAULT_MODEL is None, it will be set in model_post_init
-    DEFAULT_MODEL: AllModelEnum | None = None  # type: ignore[assignment]
-    DEFAULT_AGENT: str = model_config.get("DEFAULT_AGENT", "SQL-LLM")
+    # Initialize with None and set in model_post_init
+    DEFAULT_MODEL: AllModelEnum | None = None
+    DEFAULT_AGENT: str = "Chat"
     DEFAULT_AGENT_INTRO: str = "Hello! I'm an AI-powered assistant. I can convert your natural language queries to SQL queries."
     AVAILABLE_MODELS: set[AllModelEnum] = set()  # type: ignore[assignment]
 
@@ -71,9 +61,8 @@ class Settings(BaseSettings):
     LANGCHAIN_ENDPOINT: Annotated[str, BeforeValidator(check_str_is_http)] = ("")
     LANGCHAIN_API_KEY: SecretStr | None = None
 
-
-    LANGFUSE_SECRET_KEY: str | None = model_config.get("LANGFUSE_SECRET_KEY", "password")
-    LANGFUSE_PUBLIC_KEY: str | None = model_config.get("LANGFUSE_PUBLIC_KEY", "password")
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_PUBLIC_KEY: str | None = None
     LANGFUSE_HOST: str | None = Field(default="https://cloud.langfuse.com")
 
     def model_post_init(self, __context: Any) -> None:
@@ -90,7 +79,11 @@ class Settings(BaseSettings):
         }
         active_keys = [k for k, v in api_keys.items() if v]
         if not active_keys:
-            raise ValueError("At least one LLM API key must be provided.")
+            # If no API keys are provided, use the fake model
+            self.USE_FAKE_MODEL = True
+            self.DEFAULT_MODEL = FakeModelName.FAKE
+            self.AVAILABLE_MODELS = {FakeModelName.FAKE}
+            return
 
         for provider in active_keys:
             match provider:

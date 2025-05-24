@@ -2,9 +2,10 @@ import random
 from typing import Literal
 
 from langchain_core.messages import AIMessage
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.types import Command
-from langgraph.checkpoint.memory import MemorySaver
+
 
 class AgentState(MessagesState, total=False):
     """`total=False` is PEP589 specs.

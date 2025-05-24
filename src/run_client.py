@@ -3,7 +3,7 @@ import asyncio
 from client import AgentClient
 from core import settings
 from schema import ChatMessage
-from langfuse.callback import CallbackHandler
+
 
 async def amain() -> None:
     #### ASYNC ####

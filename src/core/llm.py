@@ -6,22 +6,21 @@ from langchain_aws import ChatBedrock
 from langchain_community.chat_models import FakeListChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
-from langchain_openai import AzureChatOpenAI
 from langchain_ollama import ChatOllama
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from core.settings import settings
 from schema.models import (
     AllModelEnum,
     AnthropicModelName,
     AWSModelName,
+    AzureOpenAIModelName,
     DeepseekModelName,
     FakeModelName,
     GoogleModelName,
     GroqModelName,
-    OpenAIModelName,
-    AzureOpenAIModelName,
     OllamaModelName,
+    OpenAIModelName,
 )
 
 _MODEL_TABLE = {

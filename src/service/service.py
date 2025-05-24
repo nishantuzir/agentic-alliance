@@ -12,11 +12,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core._api import LangChainBetaWarning
 from langchain_core.messages import AnyMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
+from langfuse import Langfuse as LangfuseClient
+from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph.state import CompiledStateGraph
-from langfuse import Langfuse as LangfuseClient
-from langfuse.decorators import langfuse_context
-from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
+
 from agents import DEFAULT_AGENT, get_agent, get_all_agent_info
 from core import settings
 from schema import (
@@ -29,7 +29,6 @@ from schema import (
     StreamInput,
     UserInput,
 )
-
 from service.utils import (
     convert_message_content_to_string,
     langchain_to_chat_message,
@@ -39,12 +38,27 @@ from service.utils import (
 warnings.filterwarnings("ignore", category=LangChainBetaWarning)
 logger = logging.getLogger(__name__)
 
+# Initialize Langfuse client if tracing is enabled
+langfuse_client = None
+langfuse_handler = None
 
-langfuse_client = LangfuseClient(secret_key=settings.LANGFUSE_SECRET_KEY, 
-                                 public_key=settings.LANGFUSE_PUBLIC_KEY, 
-                                 host=settings.LANGFUSE_HOST)
-
-langfuse_handler = LangfuseCallbackHandler() if settings.TRACING else None
+if settings.TRACING and settings.LANGFUSE_SECRET_KEY and settings.LANGFUSE_PUBLIC_KEY:
+    try:
+        langfuse_client = LangfuseClient(
+            secret_key=settings.LANGFUSE_SECRET_KEY,
+            public_key=settings.LANGFUSE_PUBLIC_KEY,
+            host=settings.LANGFUSE_HOST
+        )
+        langfuse_handler = LangfuseCallbackHandler(
+            public_key=settings.LANGFUSE_PUBLIC_KEY,
+            secret_key=settings.LANGFUSE_SECRET_KEY,
+            host=settings.LANGFUSE_HOST
+        )
+        logger.info("Langfuse tracing initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Langfuse tracing: {e}")
+        langfuse_client = None
+        langfuse_handler = None
 
 def verify_bearer(
     http_auth: Annotated[
@@ -102,12 +116,16 @@ def _parse_input(user_input: UserInput) -> tuple[dict[str, Any], UUID]:
             )
         configurable.update(user_input.agent_config)
 
+    callbacks = []
+    if langfuse_handler:
+        callbacks.append(langfuse_handler)
+
     kwargs = {
         "input": {"messages": [HumanMessage(content=user_input.message)]},
         "config": RunnableConfig(
             configurable=configurable,
             run_id=run_id,
-            callbacks=[langfuse_handler] if langfuse_handler else [],
+            callbacks=callbacks,
         ),
     }
     return kwargs, run_id
@@ -238,22 +256,32 @@ async def feedback(feedback: Feedback) -> FeedbackResponse:
 
     This is a simple wrapper for the Langfuse score API, so the
     credentials can be stored and managed in the service rather than the client.
-    See: 
     """
+    if not langfuse_client:
+        raise HTTPException(
+            status_code=400,
+            detail="Langfuse tracing is not enabled. Please set TRACING=true and provide valid Langfuse credentials."
+        )
     
     kwargs = feedback.kwargs or {}
 
-    trace = langfuse_client.trace(name=feedback.key, session_id=feedback.run_id)
-    trace_id = trace.id
-    langfuse_client.score(
-        trace_id=trace_id,
-        name="explicit_user_feedback",
-        value=feedback.score,
-        data_type="NUMERIC",
-        **kwargs,
-    )
-
-    return FeedbackResponse()
+    try:
+        trace = langfuse_client.trace(name=feedback.key, session_id=feedback.run_id)
+        trace_id = trace.id
+        langfuse_client.score(
+            trace_id=trace_id,
+            name="explicit_user_feedback",
+            value=feedback.score,
+            data_type="NUMERIC",
+            **kwargs,
+        )
+        return FeedbackResponse()
+    except Exception as e:
+        logger.error(f"Failed to record feedback to Langfuse: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to record feedback to Langfuse"
+        )
 
 
 @router.post("/history")

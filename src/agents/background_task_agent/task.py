@@ -1,5 +1,5 @@
 from typing import Literal  # Import Literal type from typing module
-from uuid import uuid4    # Import uuid4 function for generating unique IDs
+from uuid import uuid4  # Import uuid4 function for generating unique IDs
 
 from langchain_core.messages import BaseMessage  # Import BaseMessage class
 from langchain_core.runnables import RunnableConfig  # Import RunnableConfig class

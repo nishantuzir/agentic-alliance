@@ -1,13 +1,14 @@
 
-from datetime import datetime, timedelta
-from typing import Dict, Optional
-from fastapi import HTTPException, Request
 import time
+from datetime import datetime, timedelta
+
+from fastapi import HTTPException, Request
+
 
 class RateLimiter:
     def __init__(self, requests_per_minute: int = 60):
         self.requests_per_minute = requests_per_minute
-        self.requests: Dict[str, list] = {}
+        self.requests: dict[str, list] = {}
         
     def is_allowed(self, token: str) -> bool:
         now = time.time()
@@ -27,7 +28,7 @@ class RateLimiter:
 class TokenManager:
     def __init__(self, expiration_minutes: int = 60):
         self.expiration_minutes = expiration_minutes
-        self.tokens: Dict[str, datetime] = {}
+        self.tokens: dict[str, datetime] = {}
         
     def is_valid(self, token: str) -> bool:
         if token not in self.tokens:
