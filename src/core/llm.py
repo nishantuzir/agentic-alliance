@@ -49,8 +49,8 @@ _MODEL_TABLE = {
     OllamaModelName.PHI4_14B: "phi4:latest",
     OllamaModelName.WIZARDLM2_7B: "wizardlm2:7b",
     OllamaModelName.QWEN2_5_CODER_14B: "qwen2.5-coder:14b",
-    OllamaModelName.LLAMA_GUARD3_8B: "llama-guard3:latest",
-    OllamaModelName.LLAMA3_2_VISION_11B: "llama3.2-vision:latest",
+    OllamaModelName.LLAMA_GUARD3_8B: "llama-guard3:8b",
+    OllamaModelName.LLAMA3_2_VISION_11B: "llama3.2-vision:11b",
     OllamaModelName.SQLCODER_15B: "sqlcoder:15b",
     OllamaModelName.QWEN2_5_CODER_7B: "qwen2.5-coder:7b",
     OllamaModelName.QWEN2_5_1_5B: "qwen2.5:1.5b",
@@ -59,8 +59,8 @@ _MODEL_TABLE = {
     OllamaModelName.MATHSTRAL_7B: "mathstral:latest",
     OllamaModelName.QWEN2_MATH_1_5B: "qwen2-math:1.5b",
     OllamaModelName.MISTRALV0_3_7B: "mistralv0.3",
-    OllamaModelName.LLAMA3_2_3B: "llama3.2:latest",
-    OllamaModelName.LLAMA3_1_8B: "llama3.1:latest",
+    OllamaModelName.LLAMA3_2_3B: "llama3.2:3b",
+    OllamaModelName.LLAMA3_1_8B: "llama3.1:8b",
 
     FakeModelName.FAKE: "fake",
 }

@@ -1,5 +1,4 @@
 import json
-import logging
 import warnings
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -34,9 +33,11 @@ from service.utils import (
     langchain_to_chat_message,
     remove_tool_calls,
 )
+from utils.agentic_alliance_logger import setup_logger
+
+logger = setup_logger(__name__)
 
 warnings.filterwarnings("ignore", category=LangChainBetaWarning)
-logger = logging.getLogger(__name__)
 
 # Initialize Langfuse client if tracing is enabled
 langfuse_client = None
@@ -44,6 +45,7 @@ langfuse_handler = None
 
 if settings.TRACING and settings.LANGFUSE_SECRET_KEY and settings.LANGFUSE_PUBLIC_KEY:
     try:
+        logger.info("Initializing Langfuse tracing")
         langfuse_client = LangfuseClient(
             secret_key=settings.LANGFUSE_SECRET_KEY,
             public_key=settings.LANGFUSE_PUBLIC_KEY,
@@ -66,58 +68,70 @@ def verify_bearer(
         Depends(HTTPBearer(description="Please provide AUTH_SECRET api key.", auto_error=False)),
     ],
 ) -> None:
+    logger.debug("Verifying bearer token")
     if not settings.AUTH_SECRET:
+        logger.debug("No AUTH_SECRET configured, skipping verification")
         return
     auth_secret = settings.AUTH_SECRET.get_secret_value()
     if not http_auth or http_auth.credentials != auth_secret:
+        logger.warning("Invalid authentication attempt")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-
+    logger.debug("Bearer token verified successfully")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    logger.info("Starting application lifespan")
     # Construct agent with Sqlite checkpointer
     # TODO: It's probably dangerous to share the same checkpointer on multiple agents
     async with AsyncSqliteSaver.from_conn_string("checkpoints.db") as saver:
+        logger.debug("Initializing agents with Sqlite checkpointer")
         agents = get_all_agent_info()
         for a in agents:
+            logger.debug(f"Setting up agent: {a.key}")
             agent = get_agent(a.key)
             agent.checkpointer = saver
+        logger.info("All agents initialized successfully")
         yield
-    # context manager will clean up the AsyncSqliteSaver on exit
-
+    logger.info("Application lifespan ended")
 
 app = FastAPI(lifespan=lifespan)
 router = APIRouter(dependencies=[Depends(verify_bearer)])
 
-
 @router.get("/info")
 async def info() -> ServiceMetadata:
+    logger.info("Retrieving service metadata")
     models = list(settings.AVAILABLE_MODELS)
     models.sort()
-    return ServiceMetadata(
+    metadata = ServiceMetadata(
         agents=get_all_agent_info(),
         models=models,
         default_agent=settings.DEFAULT_AGENT,
         default_agent_intro=settings.DEFAULT_AGENT_INTRO,
         default_model=settings.DEFAULT_MODEL,
     )
-
+    logger.debug(f"Service metadata: {metadata}")
+    return metadata
 
 def _parse_input(user_input: UserInput) -> tuple[dict[str, Any], UUID]:
+    logger.debug(f"Parsing user input: {user_input}")
     run_id = uuid4()
     thread_id = user_input.thread_id or str(uuid4())
+    logger.debug(f"Generated run_id: {run_id}, thread_id: {thread_id}")
 
     configurable = {"thread_id": thread_id, "model": user_input.model}
 
     if user_input.agent_config:
         if overlap := configurable.keys() & user_input.agent_config.keys():
+            logger.error(f"Reserved keys found in agent_config: {overlap}")
             raise HTTPException(
                 status_code=422, detail=f"agent_config contains reserved keys: {overlap}"
             )
         configurable.update(user_input.agent_config)
+        logger.debug(f"Updated configurable with agent_config: {configurable}")
 
     callbacks = []
     if langfuse_handler:
+        logger.debug("Adding Langfuse callback handler")
         callbacks.append(langfuse_handler)
 
     kwargs = {
@@ -128,44 +142,35 @@ def _parse_input(user_input: UserInput) -> tuple[dict[str, Any], UUID]:
             callbacks=callbacks,
         ),
     }
+    logger.debug(f"Parsed input kwargs: {kwargs}")
     return kwargs, run_id
-
 
 @router.post("/{agent_id}/invoke")
 @router.post("/invoke")
 async def invoke(user_input: UserInput, agent_id: str = DEFAULT_AGENT) -> ChatMessage:
-    """
-    Invoke an agent with user input to retrieve a final response.
-
-    If agent_id is not provided, the default agent will be used.
-    Use thread_id to persist and continue a multi-turn conversation. run_id kwarg
-    is also attached to messages for recording feedback.
-    """
+    logger.info(f"Invoking agent {agent_id}")
     agent: CompiledStateGraph = get_agent(agent_id)
     kwargs, run_id = _parse_input(user_input)
     try:
+        logger.debug(f"Invoking agent with run_id: {run_id}")
         response = await agent.ainvoke(config=RunnableConfig(
             run_id=run_id,
         ),**kwargs)
         output = langchain_to_chat_message(response["messages"][-1])
         output.run_id = str(run_id)
+        logger.info(f"Agent invocation successful, run_id: {run_id}")
         return output
     except Exception as e:
-        logger.error(f"An exception occurred: {e}")
+        logger.error(f"Agent invocation failed: {str(e)}")
         raise HTTPException(status_code=500, detail="Unexpected error")
-
 
 async def message_generator(
     user_input: StreamInput, agent_id: str = DEFAULT_AGENT
 ) -> AsyncGenerator[str, None]:
-    """
-    Generate a stream of messages from the agent.
-
-    This is the workhorse method for the /stream endpoint.
-    """
-    
+    logger.info(f"Starting message stream for agent {agent_id}")
     agent: CompiledStateGraph = get_agent(agent_id)
     kwargs, run_id = _parse_input(user_input)
+    logger.debug(f"Stream initialized with run_id: {run_id}")
 
     # Process streamed events from the graph and yield messages over the SSE stream.
     async for event in agent.astream_events(**kwargs, version="v2"):
@@ -181,22 +186,26 @@ async def message_generator(
             and any(t.startswith("graph:step:") for t in event.get("tags", []))
             and "messages" in event["data"]["output"]
         ):
+            logger.debug("Processing on_chain_end event")
             new_messages = event["data"]["output"]["messages"]
 
         # Also yield intermediate messages from agents.utils.CustomData.adispatch().
         if event["event"] == "on_custom_event" and "custom_data_dispatch" in event.get("tags", []):
+            logger.debug("Processing custom event")
             new_messages = [event["data"]]
 
         for message in new_messages:
             try:
                 chat_message = langchain_to_chat_message(message)
                 chat_message.run_id = str(run_id)
+                logger.debug(f"Processed message: {chat_message.type}")
             except Exception as e:
-                logger.error(f"Error parsing message: {e}")
+                logger.error(f"Error parsing message: {str(e)}")
                 yield f"data: {json.dumps({'type': 'error', 'content': 'Unexpected error'})}\n\n"
                 continue
             # LangGraph re-sends the input message, which feels weird, so drop it
             if chat_message.type == "human" and chat_message.content == user_input.message:
+                logger.debug("Skipping duplicate human message")
                 continue
             yield f"data: {json.dumps({'type': 'message', 'content': chat_message.model_dump()})}\n\n"
 
@@ -251,47 +260,32 @@ async def stream(user_input: StreamInput, agent_id: str = DEFAULT_AGENT) -> Stre
 
 @router.post("/feedback")
 async def feedback(feedback: Feedback) -> FeedbackResponse:
-    """
-    Record feedback for a run to Langfuse.
-
-    This is a simple wrapper for the Langfuse score API, so the
-    credentials can be stored and managed in the service rather than the client.
-    """
+    logger.info(f"Processing feedback for run_id: {feedback.run_id}")
     if not langfuse_client:
-        raise HTTPException(
-            status_code=400,
-            detail="Langfuse tracing is not enabled. Please set TRACING=true and provide valid Langfuse credentials."
-        )
+        logger.warning("Langfuse client not initialized, skipping feedback")
+        return FeedbackResponse(success=False, error="Tracing not enabled")
     
-    kwargs = feedback.kwargs or {}
-
     try:
-        trace = langfuse_client.trace(name=feedback.key, session_id=feedback.run_id)
-        trace_id = trace.id
+        logger.debug(f"Creating feedback with score: {feedback.score}")
         langfuse_client.score(
-            trace_id=trace_id,
-            name="explicit_user_feedback",
-            value=feedback.score,
-            data_type="NUMERIC",
-            **kwargs,
+            run_id=feedback.run_id,
+            key=feedback.key,
+            score=feedback.score,
+            **feedback.kwargs,
         )
-        return FeedbackResponse()
+        logger.info("Feedback recorded successfully")
+        return FeedbackResponse(success=True)
     except Exception as e:
-        logger.error(f"Failed to record feedback to Langfuse: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to record feedback to Langfuse"
-        )
+        logger.error(f"Failed to record feedback: {str(e)}")
+        return FeedbackResponse(success=False, error=str(e))
 
 
 @router.post("/history")
 def history(input: ChatHistoryInput) -> ChatHistory:
-    """
-    Get chat history.
-    """
-    # TODO: Hard-coding DEFAULT_AGENT here is wonky
-    agent: CompiledStateGraph = get_agent(DEFAULT_AGENT)
+    logger.info(f"Retrieving chat history for thread_id: {input.thread_id}")
     try:
+        # TODO: Hard-coding DEFAULT_AGENT here is wonky
+        agent: CompiledStateGraph = get_agent(DEFAULT_AGENT)
         state_snapshot = agent.get_state(
             config=RunnableConfig(
                 configurable={
@@ -301,16 +295,17 @@ def history(input: ChatHistoryInput) -> ChatHistory:
         )
         messages: list[AnyMessage] = state_snapshot.values["messages"]
         chat_messages: list[ChatMessage] = [langchain_to_chat_message(m) for m in messages]
+        logger.debug("Chat history retrieved successfully")
         return ChatHistory(messages=chat_messages)
     except Exception as e:
-        logger.error(f"An exception occurred: {e}")
-        raise HTTPException(status_code=500, detail="Unexpected error")
+        logger.error(f"Failed to retrieve chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "ok"}
+    logger.debug("Health check requested")
+    return {"status": "healthy"}
 
 
 app.include_router(router)
