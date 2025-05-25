@@ -125,6 +125,8 @@ async def main() -> None:
         st.session_state.messages = messages
         st.session_state.thread_id = thread_id
         st.session_state.welcome_message = agent_client.agent_intro
+        st.session_state.last_message = None
+        st.session_state.feedback = None
         logger.debug("Thread initialization complete")
 
     # Config options
@@ -161,14 +163,14 @@ async def main() -> None:
         @st.dialog("Architecture")
         def architecture_dialog() -> None:
             st.image(
-                "https://github.com/JoshuaC215/agent-service-toolkit/blob/main/media/agent_architecture.png?raw=true"
+                "https://github.com/nishantuzir/agentic-alliance/blob/main/media/agent_architecture.png?raw=true"
             )
             st.caption(
-                "Reference: Check out the full sized image in [Agent Service Toolkit Github](https://github.com/JoshuaC215/agent-service-toolkit/blob/main/media/agent_architecture.png)"
+                "Reference: Check out the full sized image in [Full Architecture Diagram](https://github.com/nishantuzir/agentic-alliance/blob/main/media/agent_architecture.png)"
             )
 
             st.caption(
-                "Source Code Reference: Check out the source code in [Agentic Alliance](https://github.com/nishantuzir/agentic-alliance)"
+                "Source Code Reference: Check out the source code in [Agentic Alliance Github](https://github.com/nishantuzir/agentic-alliance)"
             )
 
         @st.dialog("Agentic Alliance")
@@ -179,7 +181,7 @@ async def main() -> None:
             )
 
 
-        @st.dialog("Privacy")
+        @st.dialog("Privacy Information")
         def privacy_dialog() -> None:
 
             st.caption(
@@ -195,7 +197,7 @@ async def main() -> None:
         #         "All Prompts, responses and feedbacks in the application are recorded anonymously and displayed in Langfuse for the purpose of product evaluation and improvement only."
         #     )
 
-        if st.button(":material/password: Privacy Concerns", use_container_width=True):
+        if st.button(":material/password: Privacy Information", use_container_width=True):
             privacy_dialog()
 
         if st.button(":material/info: About Agentic Alliance", use_container_width=True):
@@ -223,23 +225,33 @@ async def main() -> None:
     # Draw existing messages
     messages: list[ChatMessage] = st.session_state.messages
 
-    if len(messages) == 0:
-        welcome_message = st.session_state.welcome_message + " Type you query below to get started!"
-        with st.chat_message("ai"):
-            st.write(welcome_message)
+    # Add introduction message if chat is empty
+    if not messages:
+        intro_msg = ChatMessage(type="ai", content=st.session_state.welcome_message)
+        st.session_state.messages.append(intro_msg)
+        messages = st.session_state.messages
+
+    # Always display all messages in order
+    for m in messages:
+        if m.type == "human":
+            st.chat_message("human").write(m.content)
+        elif m.type == "ai":
+            st.chat_message("ai").write(m.content)
+        # Optionally handle other types if needed
 
     # draw_messages() expects an async iterator over messages
     async def amessage_iter() -> AsyncGenerator[ChatMessage, None]:
         for m in messages:
             yield m
 
-    await draw_messages(amessage_iter())
+    # Only call draw_messages for initial history (not for new input)
+    # await draw_messages(amessage_iter())
 
     # Generate new message if the user provided new input
     if user_input := st.chat_input("Type your message here...press Enter to send. Press Shift + Enter for a new line."):
-        messages.append(ChatMessage(type="human", content=user_input))
+        user_msg = ChatMessage(type="human", content=user_input)
+        st.session_state.messages.append(user_msg)
         st.chat_message("human").write(user_input)
-        
         try:
             if use_streaming:
                 stream = agent_client.astream(
@@ -247,6 +259,7 @@ async def main() -> None:
                     model=model,
                     thread_id=st.session_state.thread_id,
                 )
+                # Draw and append AI message via streaming
                 await draw_messages(stream, is_new=True)
             else:
                 response = await agent_client.ainvoke(
@@ -254,16 +267,22 @@ async def main() -> None:
                     model=model,
                     thread_id=st.session_state.thread_id,
                 )
-                messages.append(response)
+                st.session_state.messages.append(response)
+                st.session_state.feedback = None  # Reset feedback for new AI message
                 st.chat_message("ai").write(response.content)
-            st.rerun()  # Clear stale containers
         except AgentClientError as e:
             st.error(f"Error generating response: {e}")
             st.stop()
 
-    # If messages have been generated, show feedback widget
-    if len(messages) > 0 and st.session_state.last_message:
-        with st.session_state.last_message:
+    # Show feedback widget only after the latest AI message (not the intro)
+    if (
+        st.session_state.messages
+        and st.session_state.messages[-1].type == "ai"
+        and st.session_state.messages[-1].content != st.session_state.welcome_message
+    ):
+        if st.session_state.feedback:
+            st.success("Thank you for your feedback!")
+        else:
             await handle_feedback()
 
 
@@ -274,6 +293,7 @@ async def draw_messages(
     logger.info("Starting to draw messages")
     message_placeholder = st.empty()
     full_response = ""
+    ai_message_obj = None
     try:
         async for message in messages_agen:
             if isinstance(message, str):
@@ -281,22 +301,42 @@ async def draw_messages(
                 full_response += message
                 message_placeholder.markdown(full_response + "▌")
             else:
-                logger.info(f"Received complete message: {message.role}")
+                logger.info(f"Received complete message: {message.type}")
                 full_response = message.content
                 message_placeholder.markdown(full_response)
+                if is_new and message.type == "ai":
+                    ai_message_obj = message
     except Exception as e:
         logger.error(f"Error while drawing messages: {str(e)}")
         raise
+    finally:
+        # Ensure the final message is displayed without the cursor
+        if full_response:
+            message_placeholder.markdown(full_response)
+        # Append the AI message to history after streaming is done
+        if is_new and ai_message_obj:
+            st.session_state.messages.append(ai_message_obj)
+            st.session_state.feedback = None  # Reset feedback for new AI message
     logger.info("Finished drawing messages")
 
 
 async def handle_feedback() -> None:
     logger.info("Handling user feedback")
     try:
-        feedback = st.session_state.feedback
-        logger.debug(f"Received feedback: {feedback}")
-        # Process feedback
-        logger.info("Feedback processed successfully")
+        feedback_given = False
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("👍", use_container_width=True, key="feedback_pos"):
+                st.session_state.feedback = "positive"
+                feedback_given = True
+                logger.debug("Received positive feedback")
+        with col2:
+            if st.button("👎", use_container_width=True, key="feedback_neg"):
+                st.session_state.feedback = "negative"
+                feedback_given = True
+                logger.debug("Received negative feedback")
+        if feedback_given or st.session_state.feedback:
+            st.success("Thank you for your feedback!")
     except Exception as e:
         logger.error(f"Error processing feedback: {str(e)}")
         raise
